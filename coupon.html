@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>학급 보상 제도 플랫폼</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+        }
+        .coupon-used {
+            filter: grayscale(1);
+            opacity: 0.6;
+        }
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 100; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgb(0,0,0); /* Fallback color */
+            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 500px;
+            border-radius: 10px;
+        }
+        .close-button {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close-button:hover,
+        .close-button:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+
+    <div id="app-container" class="w-full max-w-4xl mx-auto bg-white shadow-lg rounded-lg p-4 sm:p-8">
+
+        <!-- Auth View: Login and Register -->
+        <div id="auth-view">
+            <h1 class="text-3xl font-bold text-center text-indigo-600 mb-8">학급 보상 플랫폼</h1>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- Login Form -->
+                <div class="p-6 border border-gray-200 rounded-lg">
+                    <h2 class="text-2xl font-semibold mb-4 text-center">로그인</h2>
+                    <form id="login-form">
+                        <div class="mb-4">
+                            <label for="login-username" class="block text-gray-700">아이디</label>
+                            <input type="text" id="login-username" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                        </div>
+                        <div class="mb-4">
+                            <label for="login-password" class="block text-gray-700">비밀번호</label>
+                            <input type="password" id="login-password" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                        </div>
+                        <button type="submit" class="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition">로그인</button>
+                    </form>
+                </div>
+                <!-- Register Form -->
+                <div class="p-6 border border-gray-200 rounded-lg">
+                    <h2 class="text-2xl font-semibold mb-4 text-center">교사 계정 생성</h2>
+                    <form id="register-form">
+                        <div class="mb-4">
+                            <label for="register-name" class="block text-gray-700">이름</label>
+                            <input type="text" id="register-name" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                        </div>
+                        <div class="mb-4">
+                            <label for="register-username" class="block text-gray-700">아이디</label>
+                            <input type="text" id="register-username" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                        </div>
+                        <div class="mb-4">
+                            <label for="register-password" class="block text-gray-700">비밀번호</label>
+                            <input type="password" id="register-password" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                        </div>
+                        <button type="submit" class="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition">가입하기</button>
+                    </form>
+                </div>
+            </div>
+            <p id="auth-error" class="text-red-500 text-center mt-4"></p>
+        </div>
+
+        <!-- Teacher Dashboard -->
+        <div id="teacher-dashboard" class="hidden">
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-2xl font-bold">교사 대시보드</h1>
+                <button id="teacher-logout-btn" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600">로그아웃</button>
+            </div>
+            <p class="mb-6 text-lg"><span id="teacher-name" class="font-semibold"></span> 선생님, 환영합니다.</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- Student Management -->
+                <div>
+                    <h2 class="text-xl font-semibold mb-4">학생 관리</h2>
+                     <!-- Bulk Upload Section -->
+                    <div class="bg-gray-50 p-4 rounded-lg mb-4">
+                        <h3 class="font-medium mb-2">학생 일괄 등록 (Excel)</h3>
+                        <p class="text-sm text-gray-600 mb-2">엑셀 파일의 첫 행은 '이름', '아이디', '비밀번호'여야 합니다.</p>
+                        <input type="file" id="student-excel-file" accept=".xlsx, .xls, .csv" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100 mb-2">
+                        <button id="upload-excel-btn" class="w-full bg-teal-500 text-white py-2 rounded-lg hover:bg-teal-600">엑셀 파일로 등록</button>
+                        <div id="upload-status" class="mt-2 text-sm"></div>
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded-lg mb-4">
+                        <h3 class="font-medium mb-2">학생 개별 생성</h3>
+                        <form id="add-student-form">
+                            <input type="text" id="student-name" placeholder="학생 이름" class="w-full mb-2 px-3 py-2 border rounded-lg" required>
+                            <input type="text" id="student-username" placeholder="학생 아이디" class="w-full mb-2 px-3 py-2 border rounded-lg" required>
+                            <input type="password" id="student-password" placeholder="학생 비밀번호" class="w-full mb-2 px-3 py-2 border rounded-lg" required>
+                            <button type="submit" class="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600">학생 추가</button>
+                        </form>
+                    </div>
+                    <div id="student-list" class="space-y-2"></div>
+                </div>
+
+                <!-- Coupon Management -->
+                <div>
+                    <h2 class="text-xl font-semibold mb-4">쿠폰 관리</h2>
+                    <div class="bg-gray-50 p-4 rounded-lg mb-4">
+                        <h3 class="font-medium mb-2">새 쿠폰 생성</h3>
+                        <form id="add-coupon-form">
+                            <input type="text" id="coupon-name" placeholder="쿠폰 이름 (예: 인형뽑기 이용권)" class="w-full mb-2 px-3 py-2 border rounded-lg" required>
+                            <textarea id="coupon-description" placeholder="쿠폰 내용 (예: 쉬는시간, 점심시간에 사용 가능)" class="w-full mb-2 px-3 py-2 border rounded-lg" rows="3" required></textarea>
+                            <button type="submit" class="w-full bg-green-500 text-white py-2 rounded-lg hover:bg-green-600">쿠폰 생성</button>
+                        </form>
+                    </div>
+                    <div id="coupon-list" class="space-y-2"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Student Dashboard -->
+        <div id="student-dashboard" class="hidden">
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-2xl font-bold">나의 쿠폰함</h1>
+                <button id="student-logout-btn" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600">로그아웃</button>
+            </div>
+            <p class="mb-6 text-lg"><span id="student-dashboard-name" class="font-semibold"></span> 학생, 환영합니다.</p>
+
+            <div id="student-coupon-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- 쿠폰이 여기에 동적으로 추가됩니다 -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- Award Coupon Modal -->
+    <div id="award-coupon-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" id="close-modal-btn">&times;</span>
+            <h2 class="text-xl font-semibold mb-4">쿠폰 부여하기</h2>
+            <p class="mb-4"><span id="award-to-student-name" class="font-bold"></span> 학생에게 부여할 쿠폰을 선택하세요.</p>
+            <div id="modal-coupon-selection" class="space-y-2"></div>
+            <p id="award-error" class="text-red-500 mt-2"></p>
+        </div>
+    </div>
+
+    <!-- Password Reset Modal -->
+    <div id="reset-password-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" id="close-reset-modal-btn">&times;</span>
+            <h2 class="text-xl font-semibold mb-4">비밀번호 재설정</h2>
+            <p class="mb-4"><span id="reset-student-name" class="font-bold"></span> 학생의 새 비밀번호를 입력하세요.</p>
+            <form id="reset-password-form">
+                <input type="password" id="new-student-password" class="w-full px-3 py-2 border rounded-lg" placeholder="새 비밀번호" required>
+                <button type="submit" class="w-full mt-4 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700">저장하기</button>
+            </form>
+            <p id="reset-error" class="text-red-500 mt-2"></p>
+        </div>
+    </div>
+
+
+    <script type="module">
+        // Firebase 11.6.1 version
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, addDoc, getDocs, setDoc, query, where, onSnapshot, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Firebase Configuration ---
+        const firebaseConfig = typeof __firebase_config !== 'undefined'
+            ? JSON.parse(__firebase_config)
+            : {};
+
+        let app, db, auth;
+        try {
+            if (!firebaseConfig.projectId) {
+                throw new Error("Firebase configuration is missing or invalid.");
+            }
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            console.log("Firebase Initialized Successfully");
+        } catch (e) {
+            console.error("Error initializing Firebase:", e);
+            const appContainer = document.getElementById('app-container');
+            if (appContainer) {
+                appContainer.innerHTML = '<div class="text-red-500 text-center p-8">Firebase 초기화에 실패했습니다. 설정을 확인해주세요.</div>';
+            }
+        }
+
+        // --- Authentication and App Initialization ---
+        async function initializeAppWithAuth() {
+            if (!db || !auth) return;
+            
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                console.log("Firebase Auth Ready. User UID:", auth.currentUser.uid);
+                runAppLogic(); // Run the main application logic after successful authentication
+            } catch (error) {
+                 console.error("Firebase authentication failed:", error);
+                 const appContainer = document.getElementById('app-container');
+                 if (appContainer) {
+                    appContainer.innerHTML = '<div class="text-red-500 text-center p-8">인증에 실패했습니다. 페이지를 새로고침 해주세요.</div>';
+                 }
+            }
+        }
+
+        function runAppLogic() {
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+            // --- Global State ---
+            let currentUser = null;
+            let unsubscribeStudentList = null;
+            let unsubscribeCouponList = null;
+            let unsubscribeStudentCoupons = null;
+
+            // --- UI Elements ---
+            const authView = document.getElementById('auth-view');
+            const teacherDashboard = document.getElementById('teacher-dashboard');
+            const studentDashboard = document.getElementById('student-dashboard');
+            const loginForm = document.getElementById('login-form');
+            const registerForm = document.getElementById('register-form');
+            const authError = document.getElementById('auth-error');
+
+            const awardModal = document.getElementById('award-coupon-modal');
+            const closeModalBtn = document.getElementById('close-modal-btn');
+            let studentToAward = null;
+
+            const resetPasswordModal = document.getElementById('reset-password-modal');
+            const closeResetModalBtn = document.getElementById('close-reset-modal-btn');
+            const resetPasswordForm = document.getElementById('reset-password-form');
+            let studentToReset = null;
+
+            const uploadExcelBtn = document.getElementById('upload-excel-btn');
+            const studentExcelFile = document.getElementById('student-excel-file');
+            const uploadStatus = document.getElementById('upload-status');
+
+
+            // --- Helper Functions ---
+            function clearSubscriptions() {
+                if (unsubscribeStudentList) unsubscribeStudentList();
+                if (unsubscribeCouponList) unsubscribeCouponList();
+                if (unsubscribeStudentCoupons) unsubscribeStudentCoupons();
+            }
+            
+            function showView(viewId) {
+                authView.classList.add('hidden');
+                teacherDashboard.classList.add('hidden');
+                studentDashboard.classList.add('hidden');
+                document.getElementById(viewId).classList.remove('hidden');
+            }
+
+            // --- Authentication Logic ---
+            registerForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                authError.textContent = '';
+                const name = document.getElementById('register-name').value;
+                const username = document.getElementById('register-username').value;
+                const password = document.getElementById('register-password').value;
+
+                try {
+                    const usersRef = collection(db, `artifacts/${appId}/public/data/users`);
+                    const q = query(usersRef, where("username", "==", username));
+                    const querySnapshot = await getDocs(q);
+
+                    if (!querySnapshot.empty) {
+                        authError.textContent = '이미 사용 중인 아이디입니다.';
+                        return;
+                    }
+
+                    const newUser = { name, username, password, role: 'teacher', createdAt: new Date() };
+                    await addDoc(usersRef, newUser);
+                    alert(`${name}님, 회원가입이 완료되었습니다. 로그인해주세요.`);
+                    registerForm.reset();
+
+                } catch (error) {
+                    console.error("Error registering user: ", error);
+                    authError.textContent = '회원가입 중 오류가 발생했습니다.';
+                }
+            });
+
+            loginForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                authError.textContent = '';
+                const username = document.getElementById('login-username').value;
+                const password = document.getElementById('login-password').value;
+
+                try {
+                    const usersRef = collection(db, `artifacts/${appId}/public/data/users`);
+                    const q = query(usersRef, where("username", "==", username), where("password", "==", password));
+                    const querySnapshot = await getDocs(q);
+
+                    if (querySnapshot.empty) {
+                        authError.textContent = '아이디 또는 비밀번호가 일치하지 않습니다.';
+                        return;
+                    }
+
+                    const userDoc = querySnapshot.docs[0];
+                    currentUser = { id: userDoc.id, ...userDoc.data() };
+                    navigateToDashboard();
+                } catch (error) {
+                    console.error("Error logging in: ", error);
+                    authError.textContent = '로그인 중 오류가 발생했습니다.';
+                }
+            });
+
+            function handleLogout() {
+                currentUser = null;
+                clearSubscriptions();
+                showView('auth-view');
+            }
+
+            document.getElementById('teacher-logout-btn').addEventListener('click', handleLogout);
+            document.getElementById('student-logout-btn').addEventListener('click', handleLogout);
+
+            function navigateToDashboard() {
+                if (!currentUser) return;
+                if (currentUser.role === 'teacher') {
+                    showView('teacher-dashboard');
+                    loadTeacherData();
+                } else if (currentUser.role === 'student') {
+                    showView('student-dashboard');
+                    loadStudentData();
+                }
+            }
+
+            // --- Teacher Dashboard Logic ---
+            function loadTeacherData() {
+                document.getElementById('teacher-name').textContent = currentUser.name;
+                setupStudentListener();
+                setupCouponListener();
+            }
+
+            // Student management
+            document.getElementById('add-student-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const name = document.getElementById('student-name').value;
+                const username = document.getElementById('student-username').value;
+                const password = document.getElementById('student-password').value;
+
+                try {
+                     const usersRef = collection(db, `artifacts/${appId}/public/data/users`);
+                     const q = query(usersRef, where("username", "==", username));
+                     const querySnapshot = await getDocs(q);
+
+                     if (!querySnapshot.empty) {
+                         alert('이미 사용 중인 학생 아이디입니다.');
+                         return;
+                     }
+                    
+                    await addDoc(usersRef, { name, username, password, role: 'student', teacherId: currentUser.id, createdAt: new Date() });
+                    alert(`${name} 학생 계정이 생성되었습니다.`);
+                    e.target.reset();
+
+                } catch(error) {
+                    console.error("Error adding student:", error);
+                    alert('학생 추가 중 오류가 발생했습니다.');
+                }
+            });
+
+            uploadExcelBtn.addEventListener('click', async () => {
+                const file = studentExcelFile.files[0];
+                if (!file) {
+                    uploadStatus.textContent = '먼저 엑셀 파일을 선택해주세요.';
+                    uploadStatus.className = 'mt-2 text-sm text-red-500';
+                    return;
+                }
+
+                uploadStatus.textContent = '처리 중...';
+                uploadStatus.className = 'mt-2 text-sm text-blue-500';
+                
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    try {
+                        const data = new Uint8Array(event.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const sheetName = workbook.SheetNames[0];
+                        const worksheet = workbook.Sheets[sheetName];
+                        const students = XLSX.utils.sheet_to_json(worksheet);
+
+                        if (students.length === 0) {
+                            uploadStatus.textContent = '파일에 등록할 학생 데이터가 없습니다.';
+                            uploadStatus.className = 'mt-2 text-sm text-red-500';
+                            return;
+                        }
+
+                        let successCount = 0;
+                        let failCount = 0;
+                        const errorMessages = [];
+
+                        const usersRef = collection(db, `artifacts/${appId}/public/data/users`);
+
+                        for (const student of students) {
+                            const name = student['이름'];
+                            const username = student['아이디'];
+                            const password = student['비밀번호'] ? String(student['비밀번호']) : null; // Ensure password is a string
+
+                            if (!name || !username || !password) {
+                                failCount++;
+                                errorMessages.push(`'${name || '이름 없음'}' 학생의 정보(이름, 아이디, 비밀번호)가 누락되었습니다.`);
+                                continue;
+                            }
+
+                            // Check for duplicate username
+                            const q = query(usersRef, where("username", "==", username));
+                            const querySnapshot = await getDocs(q);
+                            if (!querySnapshot.empty) {
+                                failCount++;
+                                errorMessages.push(`아이디 '${username}'는 이미 사용 중입니다.`);
+                                continue;
+                            }
+                            
+                            // Add student to Firestore
+                            await addDoc(usersRef, {
+                                name,
+                                username,
+                                password,
+                                role: 'student',
+                                teacherId: currentUser.id,
+                                createdAt: new Date()
+                            });
+                            successCount++;
+                        }
+
+                        let finalMessage = `총 ${students.length}명 중 ${successCount}명 등록 성공, ${failCount}명 실패.`;
+                        if (errorMessages.length > 0) {
+                            finalMessage += '<br>' + errorMessages.join('<br>');
+                        }
+                        uploadStatus.innerHTML = finalMessage;
+                        uploadStatus.className = failCount > 0 ? 'mt-2 text-sm text-red-500' : 'mt-2 text-sm text-green-500';
+                        
+                        studentExcelFile.value = ''; // Reset file input
+
+                    } catch (error) {
+                        console.error("Error processing Excel file:", error);
+                        uploadStatus.textContent = '파일 처리 중 오류가 발생했습니다. 파일 형식을 확인해주세요.';
+                        uploadStatus.className = 'mt-2 text-sm text-red-500';
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            });
+
+            function setupStudentListener() {
+                const studentsRef = collection(db, `artifacts/${appId}/public/data/users`);
+                const q = query(studentsRef, where("role", "==", "student"), where("teacherId", "==", currentUser.id));
+                
+                unsubscribeStudentList = onSnapshot(q, (snapshot) => {
+                    const studentList = document.getElementById('student-list');
+                    studentList.innerHTML = '';
+                    if (snapshot.empty) {
+                        studentList.innerHTML = '<p class="text-gray-500">아직 추가된 학생이 없습니다.</p>';
+                        return;
+                    }
+                    const sortedStudents = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()})).sort((a,b) => a.name.localeCompare(b.name));
+                    
+                    sortedStudents.forEach(student => {
+                        const studentEl = document.createElement('div');
+                        studentEl.className = 'flex justify-between items-center p-3 bg-white rounded-lg border';
+                        studentEl.innerHTML = `
+                            <span>${student.name} (${student.username})</span>
+                            <div class="flex-shrink-0">
+                                <button data-id="${student.id}" data-name="${student.name}" class="reset-pw-btn bg-yellow-500 text-white px-3 py-1 text-sm rounded-md hover:bg-yellow-600 mr-2">비밀번호 재설정</button>
+                                <button data-id="${student.id}" data-name="${student.name}" class="award-btn bg-purple-500 text-white px-3 py-1 text-sm rounded-md hover:bg-purple-600 mr-2">쿠폰 부여</button>
+                                <button data-id="${student.id}" data-name="${student.name}" class="delete-student-btn bg-red-500 text-white px-3 py-1 text-sm rounded-md hover:bg-red-600">삭제</button>
+                            </div>
+                        `;
+                        studentList.appendChild(studentEl);
+                    });
+                });
+            }
+            
+            // Coupon management
+            document.getElementById('add-coupon-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const name = document.getElementById('coupon-name').value;
+                const description = document.getElementById('coupon-description').value;
+
+                try {
+                    await addDoc(collection(db, `artifacts/${appId}/public/data/coupons`), { name, description, teacherId: currentUser.id, createdAt: new Date() });
+                    alert('새로운 쿠폰이 생성되었습니다.');
+                    e.target.reset();
+                } catch(error) {
+                    console.error("Error adding coupon:", error);
+                    alert('쿠폰 생성 중 오류가 발생했습니다.');
+                }
+            });
+
+            function setupCouponListener() {
+                const couponsRef = collection(db, `artifacts/${appId}/public/data/coupons`);
+                const q = query(couponsRef, where("teacherId", "==", currentUser.id));
+
+                unsubscribeCouponList = onSnapshot(q, (snapshot) => {
+                    const couponList = document.getElementById('coupon-list');
+                    couponList.innerHTML = '';
+                     if (snapshot.empty) {
+                         couponList.innerHTML = '<p class="text-gray-500">아직 생성된 쿠폰이 없습니다.</p>';
+                         return;
+                     }
+                    snapshot.docs.forEach(doc => {
+                        const coupon = {id: doc.id, ...doc.data()};
+                        const couponEl = document.createElement('div');
+                        couponEl.className = 'flex justify-between items-center p-3 bg-white rounded-lg border';
+                        couponEl.innerHTML = `
+                            <div>
+                                <p class="font-semibold">${coupon.name}</p>
+                                <p class="text-sm text-gray-600">${coupon.description}</p>
+                            </div>
+                            <button data-id="${coupon.id}" class="delete-coupon-btn bg-red-500 text-white px-3 py-1 text-sm rounded-md hover:bg-red-600 flex-shrink-0">삭제</button>
+                        `;
+                        couponList.appendChild(couponEl);
+                    });
+                });
+            }
+
+            document.getElementById('coupon-list').addEventListener('click', async (e) => {
+                if (e.target.classList.contains('delete-coupon-btn')) {
+                    const couponId = e.target.dataset.id;
+                    try {
+                        const couponDocRef = doc(db, `artifacts/${appId}/public/data/coupons`, couponId);
+                        await deleteDoc(couponDocRef);
+                        // No alert needed. UI will update.
+                    } catch (error) {
+                        console.error("Error deleting coupon: ", error);
+                    }
+                }
+            });
+            
+            // --- Teacher actions (Awarding coupons, resetting passwords, deleting students) ---
+            document.getElementById('student-list').addEventListener('click', async (e) => {
+                if (e.target.classList.contains('award-btn')) {
+                    studentToAward = { id: e.target.dataset.id, name: e.target.dataset.name };
+                    openAwardModal();
+                } else if (e.target.classList.contains('reset-pw-btn')) {
+                    studentToReset = { id: e.target.dataset.id, name: e.target.dataset.name };
+                    openResetPasswordModal();
+                } else if (e.target.classList.contains('delete-student-btn')) {
+                    const studentId = e.target.dataset.id;
+                    const studentName = e.target.dataset.name;
+                    // No confirmation for now, to avoid using confirm()
+                    try {
+                        // Delete awarded coupons first
+                        const awardedCouponsRef = collection(db, `artifacts/${appId}/public/data/awardedCoupons`);
+                        const q = query(awardedCouponsRef, where("studentId", "==", studentId));
+                        const querySnapshot = await getDocs(q);
+                        
+                        const deletePromises = [];
+                        querySnapshot.forEach((doc) => {
+                            deletePromises.push(deleteDoc(doc.ref));
+                        });
+                        await Promise.all(deletePromises);
+
+                        // Then delete the student
+                        const studentDocRef = doc(db, `artifacts/${appId}/public/data/users`, studentId);
+                        await deleteDoc(studentDocRef);
+                        
+                        console.log(`Student ${studentName} and their coupons have been deleted.`);
+                    } catch (error) {
+                        console.error("Error deleting student:", error);
+                    }
+                }
+            });
+
+            // Password Reset Modal Logic
+            function openResetPasswordModal() {
+                document.getElementById('reset-student-name').textContent = studentToReset.name;
+                resetPasswordModal.style.display = 'block';
+                document.getElementById('reset-error').textContent = '';
+                resetPasswordForm.reset();
+            }
+
+            closeResetModalBtn.onclick = function() {
+                resetPasswordModal.style.display = "none";
+                studentToReset = null;
+            }
+
+            resetPasswordForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const newPassword = document.getElementById('new-student-password').value;
+                const errorP = document.getElementById('reset-error');
+                errorP.textContent = '';
+                if (!newPassword || newPassword.length < 4) {
+                    errorP.textContent = '비밀번호는 4자 이상이어야 합니다.';
+                    return;
+                }
+                try {
+                    const studentDocRef = doc(db, `artifacts/${appId}/public/data/users`, studentToReset.id);
+                    await updateDoc(studentDocRef, { password: newPassword });
+                    alert(`${studentToReset.name} 학생의 비밀번호가 재설정되었습니다.`);
+                    resetPasswordModal.style.display = 'none';
+                    studentToReset = null;
+                } catch (error) {
+                    console.error("Error resetting password:", error);
+                    errorP.textContent = '비밀번호 재설정 중 오류가 발생했습니다.';
+                }
+            });
+
+            // Award Coupon Modal Logic
+            closeModalBtn.onclick = function() {
+                awardModal.style.display = "none";
+                studentToAward = null;
+            }
+
+            window.onclick = function(event) {
+                if (event.target == awardModal) {
+                    awardModal.style.display = "none";
+                    studentToAward = null;
+                }
+                if (event.target == resetPasswordModal) {
+                    resetPasswordModal.style.display = "none";
+                    studentToReset = null;
+                }
+            }
+            
+            async function openAwardModal() {
+                document.getElementById('award-to-student-name').textContent = studentToAward.name;
+                const modalCouponSelection = document.getElementById('modal-coupon-selection');
+                modalCouponSelection.innerHTML = '<p>쿠폰 목록을 불러오는 중...</p>';
+                
+                const couponsRef = collection(db, `artifacts/${appId}/public/data/coupons`);
+                const q = query(couponsRef, where("teacherId", "==", currentUser.id));
+                const snapshot = await getDocs(q);
+
+                if (snapshot.empty) {
+                    modalCouponSelection.innerHTML = '<p class="text-gray-500">부여할 쿠폰이 없습니다. 먼저 쿠폰을 생성해주세요.</p>';
+                } else {
+                    modalCouponSelection.innerHTML = '';
+                     snapshot.docs.forEach(doc => {
+                         const coupon = {id: doc.id, ...doc.data()};
+                         const couponOptionEl = document.createElement('div');
+                         couponOptionEl.className = 'flex items-center p-2 border rounded-md cursor-pointer hover:bg-gray-100';
+                         couponOptionEl.innerHTML = `
+                             <input type="radio" id="coupon-${coupon.id}" name="coupon-choice" value="${coupon.id}" class="mr-3">
+                             <label for="coupon-${coupon.id}" class="w-full">
+                                 <span class="font-semibold">${coupon.name}</span>
+                                 <p class="text-sm text-gray-500">${coupon.description}</p>
+                             </label>`;
+                         couponOptionEl.dataset.couponData = JSON.stringify(coupon);
+                         modalCouponSelection.appendChild(couponOptionEl);
+                     });
+                     const awardConfirmBtn = document.createElement('button');
+                     awardConfirmBtn.textContent = '부여하기';
+                     awardConfirmBtn.className = 'w-full mt-4 bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700';
+                     awardConfirmBtn.onclick = awardSelectedCoupon;
+                     modalCouponSelection.appendChild(awardConfirmBtn);
+                }
+                awardModal.style.display = "block";
+            }
+
+            async function awardSelectedCoupon() {
+                const selectedRadio = document.querySelector('input[name="coupon-choice"]:checked');
+                const errorP = document.getElementById('award-error');
+                errorP.textContent = '';
+                if (!selectedRadio) {
+                    errorP.textContent = '부여할 쿠폰을 선택해주세요.';
+                    return;
+                }
+                const couponData = JSON.parse(selectedRadio.parentElement.dataset.couponData);
+                try {
+                    await addDoc(collection(db, `artifacts/${appId}/public/data/awardedCoupons`), {
+                        studentId: studentToAward.id, teacherId: currentUser.id, couponId: couponData.id,
+                        couponName: couponData.name, couponDescription: couponData.description, status: 'new', awardedAt: new Date()
+                    });
+                    alert(`${studentToAward.name} 학생에게 "${couponData.name}" 쿠폰이 부여되었습니다.`);
+                    awardModal.style.display = "none";
+                    studentToAward = null;
+                } catch(error) {
+                    console.error('Error awarding coupon:', error);
+                    errorP.textContent = '쿠폰 부여 중 오류가 발생했습니다.';
+                }
+            }
+
+            // --- Student Dashboard Logic ---
+            function loadStudentData() {
+                document.getElementById('student-dashboard-name').textContent = currentUser.name;
+                setupStudentCouponListener();
+            }
+
+            function setupStudentCouponListener() {
+                const awardedCouponsRef = collection(db, `artifacts/${appId}/public/data/awardedCoupons`);
+                const q = query(awardedCouponsRef, where("studentId", "==", currentUser.id));
+                
+                unsubscribeStudentCoupons = onSnapshot(q, (snapshot) => {
+                    const couponListDiv = document.getElementById('student-coupon-list');
+                    couponListDiv.innerHTML = '';
+                    if (snapshot.empty) {
+                        couponListDiv.innerHTML = '<p class="text-gray-500 col-span-full text-center">아직 받은 쿠폰이 없습니다.</p>';
+                        return;
+                    }
+
+                    const coupons = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    // Sort by awarded date, newest first
+                    coupons.sort((a, b) => b.awardedAt.toDate() - a.awardedAt.toDate());
+
+                    coupons.forEach(coupon => {
+                        const isUsed = coupon.status === 'used';
+                        const couponCard = document.createElement('div');
+                        couponCard.className = `p-6 rounded-xl shadow-md flex flex-col justify-between transition-transform transform hover:scale-105 ${isUsed ? 'coupon-used bg-gray-200' : 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white'}`;
+                        
+                        let awardedDate = '날짜 정보 없음';
+                        if(coupon.awardedAt && coupon.awardedAt.toDate) {
+                            awardedDate = coupon.awardedAt.toDate().toLocaleDateString('ko-KR');
+                        }
+
+                        couponCard.innerHTML = `
+                            <div>
+                                <h3 class="text-xl font-bold mb-2">${coupon.couponName}</h3>
+                                <p class="text-sm ${isUsed ? 'text-gray-600' : 'text-indigo-100'} mb-4">${coupon.couponDescription}</p>
+                            </div>
+                            <div class="mt-4 pt-4 border-t ${isUsed ? 'border-gray-400' : 'border-indigo-400'}">
+                                 <p class="text-xs ${isUsed ? 'text-gray-500' : 'text-indigo-200'}">받은 날짜: ${awardedDate}</p>
+                                <button 
+                                    data-id="${coupon.id}" 
+                                    class="use-coupon-btn w-full mt-2 py-2 px-4 rounded-lg font-semibold transition ${isUsed ? 'bg-gray-400 cursor-not-allowed' : 'bg-white text-indigo-600 hover:bg-indigo-100'}"
+                                    ${isUsed ? 'disabled' : ''}
+                                >
+                                    ${isUsed ? '사용 완료' : '사용하기'}
+                                </button>
+                            </div>
+                        `;
+                        couponListDiv.appendChild(couponCard);
+                    });
+                });
+            }
+
+            document.getElementById('student-coupon-list').addEventListener('click', async (e) => {
+                if (e.target.classList.contains('use-coupon-btn')) {
+                    const couponId = e.target.dataset.id;
+                    
+                    try {
+                        const couponDocRef = doc(db, `artifacts/${appId}/public/data/awardedCoupons`, couponId);
+                        await updateDoc(couponDocRef, { status: 'used' });
+                        // UI will update automatically via onSnapshot
+                    } catch (error) {
+                        console.error("Error using coupon:", error);
+                        alert('쿠폰 사용 중 오류가 발생했습니다.');
+                    }
+                }
+            });
+
+            // --- App Initialization ---
+            showView('auth-view'); // Start with the login/register view
+        }
+
+        // --- Start the App ---
+        initializeAppWithAuth();
+    </script>
+</body>
+</html>
+
